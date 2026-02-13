@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="LooperWorks is a design and research practice operating at the intersection of architecture, urbanism, and education. Founded in 2019.">
+<meta name="author" content="Seth Looper">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="LooperWorks">
+<meta property="og:description" content="Design and research practice at the intersection of architecture, urbanism, and education.">
+<meta property="og:url" content="https://looperworks.github.io">
+<meta property="og:site_name" content="LooperWorks">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="LooperWorks">
+<meta name="twitter:description" content="Design and research practice at the intersection of architecture, urbanism, and education.">
+
+<title>LooperWorks</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+/* === Fonts === */
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-Book.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-BookItalic.otf') format('opentype');font-weight:400;font-style:italic;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-Medium.otf') format('opentype');font-weight:500;font-style:normal;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-MediumItalic.otf') format('opentype');font-weight:500;font-style:italic;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-Bold.otf') format('opentype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-BoldItalic.otf') format('opentype');font-weight:700;font-style:italic;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-Black.otf') format('opentype');font-weight:900;font-style:normal;font-display:swap}
+@font-face{font-family:'CircularStd';src:url('fonts/CircularStd-BlackItalic.otf') format('opentype');font-weight:900;font-style:italic;font-display:swap}
+
+/* === Reset === */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f7f6f3;--text:#111;--text-light:#999;--text-mid:#666;
+  --accent:#D93025;
+  --panel-bg:rgba(255,255,255,0.92);--panel-w:370px;
+  --body:'CircularStd',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+  --label:'CircularStd',-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--body);font-size:14.5px;line-height:1.6;font-weight:400;-webkit-font-smoothing:antialiased}
+
+/* === Layout === */
+#app{width:100%;height:100%;display:flex}
+.map{flex:1;position:relative;overflow:hidden;cursor:default}
+.map.dragging{cursor:grabbing}
+.map svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.map svg path{fill:none;stroke:var(--text);stroke-width:1;opacity:0;transition:opacity .3s ease}
+.map svg path.visible{opacity:1;transition:opacity 800ms cubic-bezier(.16,1,.3,1)}
+.map svg path.dashed{stroke:#aaa;stroke-dasharray:6 4}
+.map svg path.dotted{stroke:#bbb;stroke-dasharray:2 4}
+
+/* === Nodes — three-state transition system === */
+.n{position:absolute;display:flex;flex-direction:column;align-items:center;cursor:grab;z-index:2;
+  opacity:0;transform:translate(-50%,-50%);pointer-events:none}
+.n:active{cursor:grabbing}
+/* Previously-visible: stays visible, slides to new position */
+.n.previously-visible{opacity:1;pointer-events:auto;transition:left 800ms cubic-bezier(.16,1,.3,1), top 800ms cubic-bezier(.16,1,.3,1), opacity 400ms ease, transform 600ms cubic-bezier(.16,1,.3,1)}
+/* Newly-visible: fades in + scales up at final position */
+.n.newly-visible{opacity:1;pointer-events:auto;transform:translate(-50%,-50%) scale(1);transition:opacity 700ms ease, transform 700ms cubic-bezier(.16,1,.3,1)}
+/* Entering: start small */
+.n.entering-small{opacity:0;transform:translate(-50%,-50%) scale(0.55)}
+/* Leaving: fades out + shrinks */
+.n.leaving{opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(0.7);transition:opacity 350ms ease, transform 350ms ease}
+/* Current/selected node */
+.n.cur .sh{transform:scale(1.18);animation:none}
+.n:hover .sh{transform:scale(1.12);animation:none;filter:drop-shadow(0 0 6px var(--node-color,#999))}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.sh{width:18px;height:18px;display:flex;align-items:center;justify-content:center;transition:transform .12s ease, filter .25s ease;position:relative;animation:breathe 4s ease-in-out infinite}
+.n:nth-child(2n) .sh{animation-delay:-1s}
+.n:nth-child(3n) .sh{animation-delay:-2s}
+.n:nth-child(5n) .sh{animation-delay:-3s}
+.sh svg{width:100%;height:100%;display:block}
+
+/* Root — crosshair, rotates slowly */
+.n-root .sh{width:22px;height:22px}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.n-root .sh svg{animation:spin 12s linear infinite}
+.n-root:hover .sh svg{animation-play-state:paused}
+
+/* Path — circle */
+.n-path .sh{width:18px;height:18px}
+.pnum{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font:500 8px/1 var(--label);z-index:1}
+
+/* Architecture — solid circle (blue) */
+.n-architecture .sh{width:18px;height:18px}
+
+/* Urbanism — solid circle (green) */
+.n-urbanism .sh{width:18px;height:18px}
+
+/* Teaching — solid circle (orange) */
+.n-teaching .sh{width:18px;height:18px}
+
+/* Info — small circle */
+.n-info .sh{width:14px;height:14px}
+
+/* === Labels (absolute so node centers on shape, not shape+label) === */
+.lb{position:absolute;top:100%;left:50%;transform:translateX(-50%);text-align:center;margin-top:5px;width:max-content;max-width:160px;user-select:none}
+.lb-t{font:500 13px/1.3 var(--body);color:var(--text);display:block;
+  text-shadow:0 0 5px var(--bg),0 0 5px var(--bg),0 0 5px var(--bg),0 1px 3px var(--bg)}
+.lb-s{font:400 9px/1.3 var(--label);color:var(--text-light);text-transform:uppercase;letter-spacing:.07em;display:block;margin-top:1px;
+  text-shadow:0 0 4px var(--bg),0 0 4px var(--bg),0 0 4px var(--bg)}
+
+/* === Panel === */
+.panel{width:var(--panel-w);min-width:var(--panel-w);height:100%;padding:24px 18px 24px 10px;overflow:hidden;z-index:10}
+.pc{background:var(--panel-bg);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 1px 6px rgba(0,0,0,.05);padding:20px 22px;height:calc(100% - 0px);overflow-y:auto}
+.pc::-webkit-scrollbar{width:3px}
+.pc::-webkit-scrollbar-thumb{background:#ccc;border-radius:2px}
+
+/* Panel header */
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;cursor:pointer}
+.ph-l{display:flex;align-items:center;gap:7px}
+.ph-icon{width:14px;height:14px;display:flex;align-items:center;justify-content:center}
+.ph-icon svg{width:100%;height:100%}
+.ph-title{font:500 11.5px/1 var(--label);text-transform:uppercase;letter-spacing:.1em}
+.ph-btn{font:16px/1 var(--label);border:none;background:none;cursor:pointer;color:var(--text);padding:2px 6px}
+.ph-btn:hover{opacity:.5}
+
+/* Divider */
+hr.div{border:none;border-top:1px dashed #ccc;margin:3px 0}
+
+/* Bio */
+.bio{font:400 12.5px/1.55 var(--body);margin-bottom:16px}
+.bio a{color:var(--text)}
+.bio-ext{max-height:0;overflow:hidden;transition:max-height .4s ease, opacity .4s ease;opacity:0}
+.bio-ext.show{max-height:600px;opacity:1}
+.bio-ext-inner{padding-top:10px;font:400 12.5px/1.55 var(--body)}
+
+/* Sections */
+.sec{}
+.sec-h{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:7px 0;user-select:none}
+.sec-h .sl{display:flex;align-items:center;gap:7px}
+.si{width:11px;height:11px;display:flex;align-items:center;justify-content:center}
+.si svg{width:100%;height:100%}
+.sec-t{font:500 11px/1 var(--label);text-transform:uppercase;letter-spacing:.1em}
+.sec-tog{font:15px/1 var(--label);border:none;background:none;cursor:pointer;color:var(--text)}
+.sec-body{max-height:0;overflow:hidden;transition:max-height .35s ease}
+.sec.open .sec-body{max-height:2000px}
+.sec-desc{font:400 11.5px/1.5 var(--body);color:var(--text-mid);padding:3px 0 8px 18px}
+.sec-group{font:500 9px/1 var(--label);text-transform:uppercase;letter-spacing:.1em;color:var(--text-light);padding:10px 0 3px 18px}
+.sec-item{padding:4px 0 4px 18px;cursor:pointer;transition:opacity .15s}
+.sec-item:hover{opacity:.55}
+.it{font:500 13px/1.3 var(--body)}
+.is{font:400 9px/1.3 var(--label);color:var(--text-light);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+
+/* Detail view */
+.det{}
+.det-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.det-h .dl{display:flex;align-items:center;gap:7px}
+.det-type{font:500 11px/1 var(--label);text-transform:uppercase;letter-spacing:.1em}
+.det-close{font:14px/1 var(--label);border:none;background:none;cursor:pointer;color:var(--text);padding:3px 7px}
+.det-close:hover{opacity:.5}
+.det-title{font:500 15.5px/1.3 var(--body);margin-bottom:2px}
+.det-sub{font:400 13.5px/1.3 var(--body);color:var(--text-light);margin-bottom:2px}
+.det-meta{font:400 9.5px/1.6 var(--label);text-transform:uppercase;letter-spacing:.07em;color:var(--text-light);margin-bottom:14px}
+.det-body{font:400 12.5px/1.55 var(--body);margin-bottom:16px}
+.det-body a{color:var(--text);text-decoration:underline;text-underline-offset:2px;text-decoration-color:#ccc;transition:text-decoration-color .2s}
+.det-body a:hover{text-decoration-color:var(--text)}
+
+/* Media / project images */
+
+/* In-panel image gallery strip */
+.gallery{margin:0 -4px 14px;opacity:0;transition:opacity 600ms ease}
+.gallery.show{opacity:1}
+.gallery-scroll{display:flex;gap:6px;overflow-x:auto;padding:2px 4px 8px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+.gallery-scroll::-webkit-scrollbar{height:2px}
+.gallery-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:2px}
+.gallery-img{flex:0 0 auto;width:140px;height:105px;border-radius:3px;overflow:hidden;scroll-snap-align:start;cursor:zoom-in;transition:opacity .2s}
+.gallery-img:hover{opacity:.8}
+.gallery-img img{width:100%;height:100%;object-fit:cover;display:block}
+.gallery-count{font:400 9px/1.3 var(--label);color:var(--text-light);text-transform:uppercase;letter-spacing:.08em;padding:0 4px;margin-bottom:5px}
+
+/* Lightbox */
+.lightbox{position:fixed;inset:0;z-index:1000;background:rgba(10,10,10,0);cursor:zoom-out;
+  overflow:hidden;transition:background-color .4s ease;pointer-events:none;visibility:hidden}
+.lightbox.open{background:rgba(10,10,10,.95);pointer-events:auto;visibility:visible}
+.lightbox img{position:absolute;max-width:90vw;max-height:85vh;object-fit:contain;border-radius:5px;
+  top:50%;left:50%;transform:translate(-50%,-50%) scale(.92);opacity:0;transition:opacity .4s ease, transform .4s ease;cursor:zoom-out}
+.lightbox.open img{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);font:300 32px/1 var(--label);color:#fff;cursor:pointer;opacity:.4;transition:opacity .2s;background:none;border:none;padding:16px;z-index:2}
+.lb-nav:hover{opacity:1}
+.lb-prev{left:16px}
+.lb-next{right:16px}
+.lb-counter{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);font:400 10px/1 var(--label);color:#fff;opacity:.5;letter-spacing:.1em}
+
+/* Responsive */
+@media(max-width:768px){
+  :root{--panel-w:100%}
+  #app{flex-direction:column}
+  .map{height:50vh;min-height:280px}
+  .panel{width:100%;min-width:unset;height:50vh;padding:10px 14px}
+  .pc{border-radius:12px 12px 0 0}
+  .lb-t{font-size:12px}
+  .lb-s{font-size:8px}
+  .gallery-img{width:120px;height:90px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <section class="map" id="map">
+    <svg id="lines"></svg>
+  </section>
+  <div class="panel">
+    <div class="pc" id="pc"></div>
+  </div>
+</div>
+
+<script>
+// ============================================
+// DATA
+// ============================================
+const D = {
+  bio: "LooperWorks is a design and research practice operating at the intersection of architecture, urbanism, and education. The studio engages built work, speculative projects, and pedagogical programming\u2014developing spatial propositions grounded in material discipline and critical inquiry. Founded in 2019, the practice collaborates with students, educators, and design organizations to advance rigorous work across scales and contexts.",
+  bioExtended: "The practice is organized around three interconnected areas of work: architecture, urbanism, and teaching. Architectural projects range from residential studies to speculative infrastructure, each treating material assembly and spatial logic as primary design concerns. Urban research examines the city through analytical mapping and scenario-based inquiry, investigating how policy, mobility, and spatial systems shape neighborhood form and public life. Teaching operates as a form of practice\u2014intensive workshops, design studios, and seminars that foreground critical discussion, hands-on making, and the cultivation of spatial thinking.<br><br>LooperWorks approaches design as an iterative and reflective process. Projects develop through sustained engagement with physical and digital modeling, drawing, and prototyping\u2014testing propositions against the constraints of site, program, and construction. The studio values precision in both concept and craft, seeking work that is tectonically legible, contextually grounded, and open to multiple readings.",
+  nodes: {
+    lw:       {t:"root",     title:"Looper Works",             sub:"Est. 2019"},
+
+    arch:     {t:"path",     title:"Architecture",             sub:"Design & Built Work",      n:1, desc:"Design practice operating across residential, institutional, and speculative contexts. Each project begins with a disciplined question\u2014about material, geometry, program, or site\u2014and develops through iterative processes that test propositions against physical and spatial constraints. The work foregrounds construction logic, seeking architecture that is tectonically legible and spatially precise."},
+
+    urb:      {t:"path",     title:"Urbanism",                 sub:"Urban Research",            n:2, desc:"Research into the city as a layered system shaped by social dynamics, spatial infrastructures, and incremental change. The work employs analytical mapping, scenario-based design, and critical inquiry to examine how neighborhoods function, transform, and resist simplification. Each project foregrounds the relationship between territorial conditions and the lived experience of urban space."},
+
+    teach:    {t:"path",     title:"Teaching",                  sub:"Education & Workshops",     n:3, desc:"Architectural education through intensive workshops, design studios, and seminars that emphasize critical discussion, project-based inquiry, and hands-on making. Teaching is understood as a form of practice\u2014a space where questions about architecture, materiality, and spatial thinking are tested through direct engagement with students and collaborators."},
+
+    about:    {t:"info",     title:"Seth Looper",              sub:"Founder",              desc:"Seth Looper is a designer, educator, and career strategist working at the intersection of architecture, narrative, and professional development. His work bridges studio culture and career design, helping students and professionals translate ideas into intentional pathways.<br><br>Seth currently serves as Program Manager at the Center for Career Design at Dartmouth College, where he develops experiential learning initiatives, cross-campus collaborations, and reflective programming that empowers students to connect academic work with professional direction. His approach reframes career development as a design problem\u2014iterative, values-driven, and grounded in narrative clarity.<br><br>He is also an Adjunct Faculty member in the College of Architecture & Environmental Design at Kent State University, where he teaches architectural narrative and reflective design practices. In his courses, students learn to articulate intention, construct compelling portfolios, and situate their work within larger cultural and spatial conversations.<br><br>Before transitioning into higher education leadership, Seth practiced architecture with firms including William Rawn Associates and Danny Forster & Architecture, contributing to complex civic, institutional, and residential projects. His professional background informs his pragmatic yet reflective approach to mentorship.<br><br>Through LooperWorks, Seth works with students, educators, and design organizations to cultivate clarity, confidence, and direction. He believes that meaningful work is not discovered by accident\u2014it is designed with intention.", meta:"Designer \u00b7 Educator \u00b7 Career Strategist"},
+
+    wsun:     {t:"info",     title:"Wenyan Sun",               sub:"Researcher",               desc:"Researcher investigating urban systems, retail environments, and neighborhood-scale spatial conditions. Her work synthesizes spatial data, market information, and observational research to examine how commercial activity, pedestrian flow, and street-level spatial quality interact to shape the character of urban neighborhoods.<br><br>At LooperWorks, Wenyan contributes analytical frameworks that ground urban design proposals in empirical observation. Her research methods combine GIS-based spatial analysis with on-the-ground fieldwork\u2014mapping pedestrian behavior, documenting storefront typologies, and tracking the micro-economies that sustain neighborhood life. This work informs the studio\u2019s urbanism projects, providing the evidentiary basis for design interventions at the street and district scale.<br><br>Her broader research interests include the spatial economics of retail corridors, the relationship between commercial vacancy and neighborhood change, and the role of informal economies in sustaining urban vitality.", meta:"Urban Systems & Retail Strategy"},
+
+    yh:       {t:"info",     title:"Yunshu Huang",             sub:"Designer",                 desc:"Designer and Research Associate bringing a transcultural perspective to architectural practice. Yunshu holds a Master of Architecture from the University of Michigan and a Bachelor of Architecture from Hunan University. Her experience spans institutional facilities, affordable housing, and climate-responsive design, with particular interest in how cultural context and environmental performance inform spatial organization.<br><br>At LooperWorks, Yunshu contributes design development and documentation across the studio\u2019s architectural projects. Her work engages questions of material assembly, environmental responsiveness, and the translation of conceptual propositions into buildable systems. She brings particular attention to how buildings mediate between programmatic requirements and the experiential qualities of light, air, and enclosure.<br><br>Her research interests include cross-cultural approaches to housing typology, passive environmental strategies in dense urban contexts, and the role of drawing as a mode of architectural inquiry.", meta:"Research Associate"},
+
+    contact:  {t:"info",     title:"Contact",                  sub:"Inquiries",                desc:"<a href=\"mailto:seth@looperworks.com\">seth@looperworks.com</a><br><br><a href=\"https://www.linkedin.com/in/sethlooper\" target=\"_blank\" rel=\"noopener\">LinkedIn</a>&ensp;\u00b7&ensp;<a href=\"https://looperworks.github.io\" target=\"_blank\" rel=\"noopener\">looperworks.github.io</a>", meta:"General Inquiries"},
+
+    rh:       {t:"architecture", title:"Roofscape Haus",       sub:"Residential",              desc:"A residential study of the relationship between roof geometry and interior spatial experience. The timber roof operates as both structural system and spatial generator\u2014variations in pitch, ridge alignment, and sectional profile produce a range of domestic atmospheres within a single dwelling.<br><br>The design develops through iterative physical and digital modeling, testing how material assembly at the roof plane shapes light, volume, and the perception of enclosure.", meta:"Architecture \u00b7 Residential", imgs:["roofhause prototype 1.webp","roofhause prototype 2.webp","roofhause prototype 3.webp","roofhause prototype 4.webp","roofhause prototype 5.webp","roofhause prototype 6.webp","roofhause prototype 7.webp","roofhause prototype 8.webp","roofhause prototype 9.webp"]},
+
+    mh:       {t:"architecture", title:"Micro Housing I & II", sub:"Housing Research",         desc:"A two-phase research initiative investigating modular construction methodologies for compact urban dwellings. The project examines how standardized building components\u2014panels, connectors, and volumetric modules\u2014can be configured to produce housing that is spatially considered and materially economical.<br><br>The work addresses questions of tolerance, assembly sequence, and the relationship between prefabricated production logic and domestic inhabitation.", meta:"Architecture \u00b7 Housing Research", imgs:["micro+housing+1_1.webp","micro+housing+1_2.webp","micro+housing+1_3.webp","micro+housing+1_4.webp"]},
+
+    sl:       {t:"architecture", title:"Silverlake High School",sub:"Prototyping Research",     desc:"A prototyping research project exploring how facade systems and aperture configurations mediate between institutional program and environmental context. The school building is treated as a typology defined by the relationship between interior learning environments and external conditions of light, air, and view.<br><br>The project develops through iterative prototyping of wall assemblies and window systems, testing how variations in depth, angle, and material produce differentiated spatial qualities within a standardized framework.", meta:"Architecture \u00b7 Prototyping Research", imgs:["silverlake+2_1.webp","silverlake+2_2.webp","silverlake+2_3.webp","silverlake+2_4.webp","silverlake+2_5.webp","silverlake+2_6.webp"]},
+
+    ct:       {t:"architecture", title:"Cloud Terminal",        sub:"Speculative",              desc:"A speculative infrastructure project examining the intersection of transit architecture, computational geometry, and material expression. The design investigates how metal mesh assemblies and perforated screen systems produce large-scale enclosures that are simultaneously transparent and volumetrically complex.<br><br>The transit terminal serves as a testing ground for questions of atmosphere and porosity. Working through parametric modeling and physical mock-ups, the project explores how computational tools inform material decisions at the scale of public infrastructure.", meta:"Architecture \u00b7 Speculative", imgs:["cloud+terminal+4_1.webp","cloud+terminal+4_2.webp","cloud+terminal+4_3.webp","cloud+terminal+4_4.webp"]},
+
+    lb:       {t:"architecture", title:"Lens Bridge",           sub:"Infrastructure",           desc:"A structural and spatial investigation of bridge typology reimagined as inhabited public space. Drawing on the optical principles of the Fresnel lens, the project explores how a bridge\u2019s structural section can be shaped to concentrate views, frame landscapes, and produce varied spatial experiences along its length.<br><br>The design proposes an infrastructural element that is not merely a span between two points but a destination\u2014a place of gathering, observation, and public life. The project engages questions of structural expression, visual perception, and the civic potential of engineering.", meta:"Architecture \u00b7 Infrastructure", imgs:["lens+bridge+1_1.webp","lens+bridge+1_2.webp","lens+bridge+1_3.webp","lens+bridge+1_4.webp","lens+bridge+1_5.webp"]},
+
+    ap:       {t:"urbanism",  title:"The Atlas Project",        sub:"Urban Mapping",            desc:"An analytical mapping framework that reveals spatial relationships between policy, mobility, and public life in urban territories. Layered cartographic techniques make visible the regulatory, economic, and infrastructural forces that shape the form and function of neighborhoods.<br><br>Through systematic mapping and data synthesis, the project builds a multi-scalar reading of urban conditions, tracing how policy decisions manifest in the physical organization of streets, blocks, and public spaces.", meta:"Urbanism \u00b7 Research"},
+
+    lp:       {t:"urbanism",  title:"The Lumen Project",        sub:"Urban Systems",            desc:"A systems-based investigation of urban light infrastructure and its effect on spatial experience, safety, and public life after dark. The research examines how the distribution, intensity, and quality of artificial light shapes the character of neighborhoods\u2014revealing patterns of investment, neglect, and spatial inequality often invisible during daylight hours.<br><br>The project combines field observation, photometric data collection, and spatial analysis to produce a critical reading of the nocturnal city.", meta:"Urbanism \u00b7 Systems"},
+
+    ep:       {t:"urbanism",  title:"The Echo Project",         sub:"Spatial Narratives",       desc:"An exploration of urban memory and temporal change through spatial narratives and representational experimentation. The work investigates how buildings, streets, and public spaces accumulate layers of meaning over time\u2014and how architectural representation can make these accumulated histories legible.<br><br>Working through drawing, collage, and narrative mapping, the project develops techniques for reading and communicating the temporal depth of urban places.", meta:"Urbanism \u00b7 Narrative"},
+
+    bp:       {t:"urbanism",  title:"The Brightline Project",   sub:"Transit & Territory",      desc:"A scenario-based design investigation examining the relationship between transit corridors and territorial transformation. The research asks how the introduction of high-speed rail infrastructure reshapes land use patterns, real estate markets, and the spatial organization of adjacent neighborhoods.<br><br>Through speculative design scenarios and comparative analysis, the project explores how transit investment can be directed toward equitable urban development.", meta:"Urbanism \u00b7 Transit"},
+
+    bc:       {t:"teaching",  title:"Architectural Boot Camp",  sub:"Intensive Workshop \u00b7 2019", desc:"An immersive intensive workshop conducted in Shanghai, focused on developing narrative frameworks for architectural presentation and communication. The program challenges participants to construct spatial arguments through iterative design exercises, model-making, and critical discussion.<br><br>The workshop operates on the premise that architectural skill is built through concentrated practice\u2014combining hands-on construction with reflective analysis to deepen engagement with fundamental design questions.", meta:"Teaching \u00b7 Shanghai \u00b7 2019"},
+
+    ws:       {t:"teaching",  title:"Wall & Stair Transformation",sub:"Design Studio",         desc:"A design studio investigating the tectonic relationship between walls and stairs as interconnected architectural elements. Students treat these fundamental building components not as separate systems but as a continuous spatial and structural condition\u2014exploring how their relationship generates unexpected spatial sequences and experiential qualities.<br><br>Through physical modeling and iterative design, students develop proposals that test the limits of this elemental pairing.", meta:"Teaching \u00b7 Design Studio", imgs:["wallnstair+1_1.webp","wallnstair+1_2.webp","wallnstair+1_3.webp","wallnstair+1_4.webp"]},
+
+    mw:       {t:"teaching",  title:"Metamorphic Workshop",     sub:"Material Experimentation", desc:"A material experimentation program conducted in Shenzhen under the framework \u201cRoom in the City.\u201d The workshop engages participants in hands-on investigations of how materials can be manipulated, combined, and assembled to produce architectural effects at multiple scales.<br><br>The program emphasizes direct material engagement\u2014cutting, folding, casting, and joining\u2014as a mode of architectural thinking, developing design intelligence through physical making.", meta:"Teaching \u00b7 Shenzhen"},
+
+    tr:       {t:"teaching",  title:"Transformation",           sub:"Design Seminar",           desc:"A design seminar examining ecological urbanism and regenerative design as frameworks for spatial practice. The seminar investigates how principles of ecological thinking\u2014cycles, feedback, adaptation, resilience\u2014can inform architectural and urban design at multiple scales.<br><br>Through readings, case studies, and design exercises, students develop critical perspectives on the relationship between built environments and natural systems.", meta:"Teaching \u00b7 Seminar"},
+
+    ks:       {t:"teaching",  title:"Kent State Architecture",   sub:"Adjunct Faculty \u00b7 CAED",    desc:"Adjunct teaching position at Kent State University\u2019s College of Architecture and Environmental Design. Courses address architectural narrative and reflective design practices, with emphasis on articulating design intention, constructing portfolios, and situating work within broader cultural and spatial discourse.<br><br>The teaching draws on professional experience at firms including Danny Forster & Architecture and William Rawn Associates, connecting the realities of practice with academic inquiry.", meta:"Teaching \u00b7 Kent State University", link:"https://www.kent.edu/caed/seth-looper"},
+  },
+  edges: [
+    ["lw","arch","s"],["lw","urb","s"],["lw","teach","s"],["lw","about","s"],["lw","contact","d"],
+    ["lw","wsun","s"],["lw","yh","s"],
+    ["arch","rh","s"],["arch","mh","s"],["arch","sl","s"],["arch","ct","s"],["arch","lb","s"],
+    ["urb","ap","s"],["urb","lp","s"],["urb","ep","s"],["urb","bp","s"],
+    ["teach","bc","s"],["teach","ws","s"],["teach","mw","s"],["teach","tr","s"],["teach","ks","s"],
+    ["sl","urb","d"],["lb","urb","d"],["ct","urb","d"],["bp","arch","d"],
+    ["bc","arch","d"],["ws","arch","d"],["mh","teach","x"],["ap","teach","x"],["about","teach","d"],
+    ["wsun","urb","d"],["yh","arch","d"],["ks","about","d"],
+  ],
+  sections: [
+    {key:"arch",  label:"Architecture", icon:"sq",   desc:"Design practice across residential, institutional, and speculative contexts. Each project develops through iterative processes that test propositions against material and spatial constraints.", items:["rh","mh","sl","ct","lb"]},
+    {key:"urb",   label:"Urbanism",     icon:"grid", desc:"Urban research employing analytical mapping, scenario-based design, and critical inquiry at neighborhood and territorial scales.", items:["ap","lp","ep","bp"]},
+    {key:"teach", label:"Teaching",      icon:"curve",desc:"Intensive workshops, design studios, and seminars emphasizing critical discussion, hands-on making, and project-based inquiry.", items:["bc","ws","mw","tr","ks"]},
+    {key:"info",  label:"Information",   icon:"info", desc:"", groups:[{label:"Team",items:["about","wsun","yh"]},{label:"Contact",items:["contact"]}]},
+  ]
+};
+
+// ============================================
+// ENGINE
+// ============================================
+(function(){
+  const map = document.getElementById('map');
+  const svg = document.getElementById('lines');
+  const pc  = document.getElementById('pc');
+  let cur = 'lw', els = {}, openSec = new Set(), bioOpen = false;
+  let navigating = false;
+  let visibleSet = new Set();
+  let enterTimeouts = [];
+
+  // --- Architectural color palette ---
+  const typeColor = {
+    root:         '#D93025',  // red — brand anchor
+    architecture: '#1565C0',  // blue — structure / precision
+    urbanism:     '#43A047',  // green — city / landscape
+    teaching:     '#EF6C00',  // orange — energy / education
+    info:         '#D93025',  // red — firm identity
+  };
+
+  // Per-path-node color: each path category gets its section color
+  const pathColor = { arch:'#1565C0', urb:'#43A047', teach:'#EF6C00' };
+
+  function nodeColor(id){
+    const n = D.nodes[id];
+    if(!n) return '#111';
+    if(n.t==='path' && pathColor[id]) return pathColor[id];
+    return typeColor[n.t] || '#111';
+  }
+
+  const typeShape = {root:'cross', path:'cir', architecture:'sq', urbanism:'grid', teaching:'curve', info:'info'};
+  const typeLabel = {root:'Index', path:'Path', architecture:'Project', urbanism:'Project', teaching:'Program', info:'Information'};
+
+  // Shape radii for line endpoint shortening (half-shape + gap)
+  const shapeRadius = {root:14, path:12, architecture:12, urbanism:12, teaching:12, info:10};
+
+  // --- SVG shape helpers ---
+  const S = {
+    // Root: original crosshair
+    cross:(c='#D93025')=>`<svg viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" fill="none" stroke="${c}" stroke-width="1.2"/><line x1="15" y1="1" x2="15" y2="29" stroke="${c}" stroke-width="0.8"/><line x1="1" y1="15" x2="29" y2="15" stroke="${c}" stroke-width="0.8"/><circle cx="15" cy="15" r="2.5" fill="${c}"/></svg>`,
+    // All others: solid filled circles
+    cir:(c='#111')=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="${c}"/></svg>`,
+    sq:(c='#111')=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="${c}"/></svg>`,
+    grid:(c='#111')=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="${c}"/></svg>`,
+    curve:(c='#111')=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="${c}"/></svg>`,
+    info:(c='#111')=>`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.5" fill="${c}"/></svg>`,
+  };
+
+  // Section key → color (for sidebar icons)
+  const sectionColor = {sq:'#1565C0', grid:'#43A047', curve:'#EF6C00', info:'#D93025'};
+
+  // icon() — solid colored circles, crosshair for root
+  function icon(id, selected){
+    const n = D.nodes[id]; if(!n) return '';
+    const c = nodeColor(id);
+    if(n.t==='root') return S.cross(c);
+    const k = typeShape[n.t];
+    return S[k](c);
+  }
+
+  function sidebarIcon(key){
+    return S[key](sectionColor[key]||'#111');
+  }
+
+  function nd(id){return D.nodes[id]}
+
+  // --- Graph helpers ---
+  function children(id){return D.edges.filter(e=>e[0]===id&&e[2]==='s').map(e=>e[1])}
+  function parent(id){const e=D.edges.find(e=>e[1]===id&&e[2]==='s');return e?e[0]:null}
+  function connected(id){
+    const s=new Set();
+    D.edges.forEach(e=>{if(e[0]===id)s.add(e[1]);if(e[1]===id)s.add(e[0])});
+    return [...s];
+  }
+
+  // --- Create node DOM ---
+  function createNodes(){
+    Object.entries(D.nodes).forEach(([id,n])=>{
+      const el=document.createElement('div');
+      el.className='n n-'+n.t;
+      el.dataset.id=id;
+
+      const sh=document.createElement('div');
+      sh.className='sh';
+      sh.innerHTML=icon(id,false);
+      if(n.t==='path'){
+        const num=document.createElement('span');
+        num.className='pnum';
+        num.textContent=n.n||'';
+        num.style.color='#fff';
+        sh.appendChild(num);
+      }
+      el.appendChild(sh);
+
+      const lb=document.createElement('span');
+      lb.className='lb';
+      lb.innerHTML=`<span class="lb-t">${n.title}</span>${n.sub?`<span class="lb-s">${n.sub}</span>`:''}`;
+      el.appendChild(lb);
+
+      // Set node color CSS variable for hover glow
+      el.style.setProperty('--node-color', nodeColor(id));
+
+      // Drag + click handling
+      el.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();dragStart(id,e)});
+      map.appendChild(el);
+      els[id]=el;
+    });
+  }
+
+  // --- Layout ---
+  function layout(focus){
+    const r=map.getBoundingClientRect();
+    const cx=r.width*0.42, cy=r.height*0.50;
+    const pos={}, vis=new Set();
+    vis.add(focus);
+    pos[focus]={x:cx,y:cy};
+
+    const ch=children(focus), par=parent(focus), conn=connected(focus);
+    const ring=[];
+    if(par)ring.push(par);
+    ch.forEach(id=>{if(!ring.includes(id))ring.push(id)});
+    conn.forEach(id=>{if(!ring.includes(id))ring.push(id)});
+
+    const rad=Math.min(r.width*0.26, r.height*0.28, 220);
+    const sa=par?-Math.PI*0.65:-Math.PI/2;
+
+    ring.forEach((id,i)=>{
+      vis.add(id);
+      if(id===par){
+        const a=-Math.PI*0.78;
+        pos[id]={x:cx+Math.cos(a)*rad*0.85,y:cy+Math.sin(a)*rad*0.8};
+      } else {
+        const a=sa+(i/(ring.length))*Math.PI*2;
+        const j=Math.sin(id.charCodeAt(0)*2.3)*0.06;
+        pos[id]={x:cx+Math.cos(a+j)*rad,y:cy+Math.sin(a+j)*rad};
+      }
+    });
+
+    // Grandchildren
+    const outerRad=rad*1.4;
+    ring.forEach(pid=>{
+      const gc=children(pid);
+      gc.forEach(gcid=>{
+        if(vis.has(gcid))return;
+        vis.add(gcid);
+        const pp=pos[pid];
+        const ba=Math.atan2(pp.y-cy,pp.x-cx);
+        const sibs=gc.filter(g=>!vis.has(g)||g===gcid);
+        const si=sibs.indexOf(gcid);
+        const sc=sibs.length||1;
+        const off=(si-(sc-1)/2)*0.5;
+        pos[gcid]={x:cx+Math.cos(ba+off)*outerRad,y:cy+Math.sin(ba+off)*outerRad};
+      });
+    });
+
+    // Clamp to keep nodes inside map with padding
+    const pad=55;
+    Object.values(pos).forEach(p=>{
+      p.x=Math.max(pad,Math.min(r.width-pad,p.x));
+      p.y=Math.max(pad,Math.min(r.height-pad,p.y));
+    });
+
+    return{pos,vis};
+  }
+
+  // --- Apply layout with three-state transitions ---
+  function apply(focus, animate){
+    // Clear any pending staggered entrance timers
+    enterTimeouts.forEach(tid=>clearTimeout(tid));
+    enterTimeouts=[];
+
+    const{pos,vis}=layout(focus);
+    const prevVisible = new Set(visibleSet);
+
+    const staying = new Set();
+    const entering = new Set();
+    const leaving = new Set();
+
+    vis.forEach(id => {
+      if(prevVisible.has(id)) staying.add(id);
+      else entering.add(id);
+    });
+    prevVisible.forEach(id => {
+      if(!vis.has(id)) leaving.add(id);
+    });
+
+    if(!animate){
+      const initArr=Object.keys(D.nodes).filter(id=>vis.has(id));
+      const fp=pos[focus]||{x:0,y:0};
+      initArr.sort((a,b)=>{
+        const pa=pos[a]||{x:0,y:0}, pb=pos[b]||{x:0,y:0};
+        return Math.hypot(pa.x-fp.x,pa.y-fp.y)-Math.hypot(pb.x-fp.x,pb.y-fp.y);
+      });
+      initArr.forEach(id=>{
+        const el=els[id];if(!el)return;
+        el.classList.remove('previously-visible','newly-visible','leaving','cur','entering-small');
+        const p=pos[id];
+        el.style.transition='none';
+        el.style.left=p.x+'px';
+        el.style.top=p.y+'px';
+        el.classList.add('entering-small');
+        el.offsetHeight;
+        el.style.transition='';
+      });
+      requestAnimationFrame(()=>{requestAnimationFrame(()=>{
+        initArr.forEach((id,i)=>{
+          const el=els[id];if(!el)return;
+          const tid=setTimeout(()=>{
+            el.classList.remove('entering-small');
+            el.classList.add('newly-visible');
+            if(id===focus){el.classList.add('cur');updateShape(el,id,true)}
+            else{updateShape(el,id,false)}
+          },i*60);
+          enterTimeouts.push(tid);
+        });
+      })});
+      visibleSet=new Set(vis);
+      drawLines(pos,vis);
+      return;
+    }
+
+    // 1. LEAVING nodes: fade out
+    leaving.forEach(id=>{
+      const el=els[id];if(!el)return;
+      el.classList.remove('previously-visible','newly-visible');
+      el.classList.add('leaving');
+      el.classList.remove('cur');
+    });
+
+    // 2. STAYING nodes: slide to new position
+    staying.forEach(id=>{
+      const el=els[id];if(!el)return;
+      el.classList.remove('newly-visible','leaving');
+      el.classList.add('previously-visible');
+      const p=pos[id];
+      el.style.left=p.x+'px';
+      el.style.top=p.y+'px';
+      if(id===focus){el.classList.add('cur');updateShape(el,id,true)}
+      else{el.classList.remove('cur');updateShape(el,id,false)}
+    });
+
+    // 3. ENTERING nodes: place at position hidden + small, then stagger fade-in
+    const focusPos=pos[focus]||{x:0,y:0};
+    const enterArr=[...entering];
+    // Sort by distance from focus node — closest appear first
+    enterArr.sort((a,b)=>{
+      const pa=pos[a]||{x:0,y:0}, pb=pos[b]||{x:0,y:0};
+      const da=Math.hypot(pa.x-focusPos.x,pa.y-focusPos.y);
+      const db=Math.hypot(pb.x-focusPos.x,pb.y-focusPos.y);
+      return da-db;
+    });
+
+    enterArr.forEach(id=>{
+      const el=els[id];if(!el)return;
+      el.classList.remove('previously-visible','newly-visible','leaving','cur','entering-small');
+      el.style.transition='none';
+      const p=pos[id];
+      el.style.left=p.x+'px';
+      el.style.top=p.y+'px';
+      el.classList.add('entering-small');
+      el.offsetHeight;
+      el.style.transition='';
+    });
+
+    requestAnimationFrame(()=>{
+      requestAnimationFrame(()=>{
+        enterArr.forEach((id,i)=>{
+          const el=els[id];if(!el)return;
+          const delay=i*60; // 60ms stagger per node
+          const tid=setTimeout(()=>{
+            el.classList.remove('entering-small');
+            el.classList.add('newly-visible');
+            if(id===focus){el.classList.add('cur');updateShape(el,id,true)}
+            else{updateShape(el,id,false)}
+          },delay);
+          enterTimeouts.push(tid);
+        });
+      });
+    });
+
+    setTimeout(()=>{
+      leaving.forEach(id=>{
+        const el=els[id];if(!el)return;
+        el.classList.remove('leaving');
+      });
+    }, 500);
+
+    visibleSet=new Set(vis);
+    drawLinesAnimated(pos,vis);
+  }
+
+  function updateShape(el,id,selected){
+    const n=nd(id);if(!n)return;
+    if(n.t==='root')return;
+    const sh=el.querySelector('.sh');if(!sh)return;
+    const num=sh.querySelector('.pnum');
+    sh.innerHTML=icon(id,selected);
+    if(n.t==='path'){
+      const newNum=document.createElement('span');
+      newNum.className='pnum';
+      newNum.textContent=selected?'\u00d7':(n.n||'');
+      newNum.style.color='#fff';
+      sh.appendChild(newNum);
+    }
+  }
+
+  // --- Lines with endpoint shortening to meet shapes ---
+  function shortenedLine(p1,p2,r1,r2){
+    const dx=p2.x-p1.x, dy=p2.y-p1.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist<r1+r2) return null;
+    const ux=dx/dist, uy=dy/dist;
+    return{
+      x1:p1.x+ux*r1, y1:p1.y+uy*r1,
+      x2:p2.x-ux*r2, y2:p2.y-uy*r2
+    };
+  }
+
+  function drawLines(pos,vis,immediate){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    D.edges.forEach(e=>{
+      const[a,b,type]=e;
+      if(!vis.has(a)||!vis.has(b)||!pos[a]||!pos[b])return;
+      const r1=shapeRadius[D.nodes[a].t]||12;
+      const r2=shapeRadius[D.nodes[b].t]||12;
+      const line=shortenedLine(pos[a],pos[b],r1,r2);
+      if(!line)return;
+
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',`M${line.x1},${line.y1} L${line.x2},${line.y2}`);
+      if(type==='d')path.classList.add('dashed');
+      if(type==='x')path.classList.add('dotted');
+      svg.appendChild(path);
+      if(immediate){
+        path.classList.add('visible');
+      } else {
+        requestAnimationFrame(()=>requestAnimationFrame(()=>path.classList.add('visible')));
+      }
+    });
+  }
+
+  function drawLinesAnimated(pos,vis){
+    const existing = svg.querySelectorAll('path');
+    existing.forEach(p=>p.classList.remove('visible'));
+    setTimeout(()=>{
+      while(svg.firstChild)svg.removeChild(svg.firstChild);
+      drawLines(pos,vis);
+    }, 350);
+  }
+
+  // ============================================
+  // DRAG INTERACTION
+  // ============================================
+  let dragId=null, dragSX=0, dragSY=0, isDragging=false, justDragged=false;
+  let restPos={}, dragPositions={};
+
+  function dragStart(id,e){
+    dragId=id;
+    dragSX=e.clientX;
+    dragSY=e.clientY;
+    isDragging=false;
+    justDragged=false;
+
+    // Store rest positions for all visible nodes
+    restPos={};
+    Object.entries(els).forEach(([nid,el])=>{
+      if(visibleSet.has(nid)){
+        restPos[nid]={x:parseFloat(el.style.left)||0, y:parseFloat(el.style.top)||0};
+      }
+    });
+    dragPositions={...restPos};
+
+    document.addEventListener('mousemove',dragMove);
+    document.addEventListener('mouseup',dragEnd);
+  }
+
+  function dragMove(e){
+    if(!dragId)return;
+    const dx=e.clientX-dragSX, dy=e.clientY-dragSY;
+
+    if(!isDragging && Math.abs(dx)+Math.abs(dy)>5){
+      isDragging=true;
+      map.classList.add('dragging');
+      // Disable CSS transitions during drag
+      Object.entries(els).forEach(([nid,el])=>{
+        if(visibleSet.has(nid)) el.style.transition='none';
+      });
+    }
+    if(!isDragging)return;
+
+    // Dragged node follows mouse exactly
+    dragPositions[dragId]={
+      x:restPos[dragId].x+dx,
+      y:restPos[dragId].y+dy
+    };
+
+    // Direct connections: follow at 35%
+    const direct=connected(dragId);
+    direct.forEach(cid=>{
+      if(restPos[cid]){
+        dragPositions[cid]={
+          x:restPos[cid].x+dx*0.35,
+          y:restPos[cid].y+dy*0.35
+        };
+      }
+    });
+
+    // Indirect connections: follow at 10%
+    const directSet=new Set(direct);
+    directSet.add(dragId);
+    direct.forEach(cid=>{
+      connected(cid).forEach(ccid=>{
+        if(!directSet.has(ccid) && restPos[ccid]){
+          dragPositions[ccid]={
+            x:restPos[ccid].x+dx*0.10,
+            y:restPos[ccid].y+dy*0.10
+          };
+        }
+      });
+    });
+
+    // Apply positions
+    Object.entries(dragPositions).forEach(([nid,pos])=>{
+      const el=els[nid];
+      if(el && visibleSet.has(nid)){
+        el.style.left=pos.x+'px';
+        el.style.top=pos.y+'px';
+      }
+    });
+
+    // Redraw lines immediately at dragged positions
+    drawDragLines();
+  }
+
+  function drawDragLines(){
+    while(svg.firstChild)svg.removeChild(svg.firstChild);
+    D.edges.forEach(e=>{
+      const[a,b,type]=e;
+      if(!visibleSet.has(a)||!visibleSet.has(b)||!dragPositions[a]||!dragPositions[b])return;
+      const r1=shapeRadius[D.nodes[a].t]||12;
+      const r2=shapeRadius[D.nodes[b].t]||12;
+      const line=shortenedLine(dragPositions[a],dragPositions[b],r1,r2);
+      if(!line)return;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d',`M${line.x1},${line.y1} L${line.x2},${line.y2}`);
+      if(type==='d')path.classList.add('dashed');
+      if(type==='x')path.classList.add('dotted');
+      path.classList.add('visible');
+      svg.appendChild(path);
+    });
+  }
+
+  function dragEnd(e){
+    document.removeEventListener('mousemove',dragMove);
+    document.removeEventListener('mouseup',dragEnd);
+
+    if(isDragging){
+      justDragged=true;
+      map.classList.remove('dragging');
+
+      // Spring back to rest positions
+      Object.entries(restPos).forEach(([nid,pos])=>{
+        const el=els[nid];
+        if(el && visibleSet.has(nid)){
+          el.style.transition='left 600ms cubic-bezier(.25,.1,.25,1), top 600ms cubic-bezier(.25,.1,.25,1)';
+          el.style.left=pos.x+'px';
+          el.style.top=pos.y+'px';
+        }
+      });
+
+      // After spring-back, clean up and redraw lines
+      setTimeout(()=>{
+        Object.values(els).forEach(el=>{el.style.transition=''});
+        const{pos,vis}=layout(cur);
+        drawLines(pos,vis,true);
+      },650);
+    } else {
+      // It was a click, not a drag — navigate
+      justDragged=false;
+      go(dragId);
+    }
+
+    dragId=null;
+    isDragging=false;
+    restPos={};
+    dragPositions={};
+  }
+
+  // --- Panel crossfade helper ---
+  function panelFade(renderFn){
+    pc.style.transition='opacity 180ms ease';
+    pc.style.opacity='0';
+    setTimeout(()=>{
+      renderFn();
+      pc.style.opacity='1';
+      pc.style.transition='opacity 300ms ease';
+    },180);
+  }
+
+  // --- Calm, deliberate navigation ---
+  function go(id){
+    if(!nd(id)||navigating||justDragged)return;
+    navigating=true;
+    cur=id;
+    history.pushState(null,'','#/'+buildPath(id));
+    apply(id, true);
+    panelFade(()=>{if(id==='lw')renderIndex();else renderDetail(id)});
+    setTimeout(()=>{navigating=false},900);
+  }
+
+  function buildPath(id){const p=[];let c=id;while(c&&c!=='lw'){p.unshift(c);c=parent(c)}return p.join('/')}
+  function parseHash(){const h=location.hash.replace('#/','').replace('#','');if(!h)return'lw';const p=h.split('/');const l=p[p.length-1];return D.nodes[l]?l:'lw'}
+
+  // --- Section items helper (handles flat items & grouped items) ---
+  function secItems(s){
+    let o='';
+    if(s.groups){
+      s.groups.forEach(g=>{
+        o+=`<div class="sec-group">${g.label}</div>`;
+        g.items.forEach(id=>{const n=nd(id);o+=`<div class="sec-item" onclick="G.go('${id}')"><div class="it">${n.title}</div><div class="is">${n.sub||''}</div></div>`});
+      });
+    } else if(s.items){
+      s.items.forEach(id=>{const n=nd(id);o+=`<div class="sec-item" onclick="G.go('${id}')"><div class="it">${n.title}</div><div class="is">${n.sub||''}</div></div>`});
+    }
+    return o;
+  }
+
+  // --- Sidebar: Index ---
+  function renderIndex(){
+    clearMedia();
+    let h=`<div class="ph"><div class="ph-l"><span class="ph-icon">${S.cross('#D93025')}</span><span class="ph-title">Index</span></div><button class="ph-btn" onclick="G.togIdx()">&#8722;</button></div>`;
+    h+=`<div class="bio">${D.bio} &mdash; <a href="#" onclick="event.preventDefault();G.togBio()">more information</a>.<div class="bio-ext${bioOpen?' show':''}"><div class="bio-ext-inner">${D.bioExtended}</div></div></div>`;
+    D.sections.forEach(s=>{
+      const o=openSec.has(s.key);
+      h+=`<hr class="div"><div class="sec${o?' open':''}" data-s="${s.key}">`;
+      h+=`<div class="sec-h" onclick="G.togSec('${s.key}')"><div class="sl"><span class="si">${sidebarIcon(s.icon)}</span><span class="sec-t">${s.label}</span></div><button class="sec-tog">${o?'&#8722;':'+'}</button></div>`;
+      h+=`<div class="sec-body">`;
+      if(s.desc)h+=`<div class="sec-desc">${s.desc}</div>`;
+      h+=secItems(s);
+      h+=`</div></div>`;
+    });
+    pc.innerHTML=h;
+  }
+
+  // --- Image path helper ---
+  function imgPath(src){ return 'images/'+encodeURIComponent(src); }
+
+  // --- In-panel gallery strip ---
+  function galleryHTML(imgs, title){
+    if(!imgs||!imgs.length) return '';
+    let h=`<div class="gallery"><div class="gallery-count">${imgs.length} image${imgs.length>1?'s':''}</div><div class="gallery-scroll">`;
+    imgs.forEach((src,i)=>{
+      h+=`<div class="gallery-img" onclick="G.lightbox(${i})"><img src="${imgPath(src)}" alt="${title} ${i+1}" loading="lazy"/></div>`;
+    });
+    h+=`</div></div>`;
+    return h;
+  }
+
+  function showMedia(){
+    requestAnimationFrame(()=>{
+      document.querySelectorAll('.gallery').forEach(el=>el.classList.add('show'));
+    });
+  }
+
+  function clearMedia(){
+    closeLightbox();
+  }
+
+  // --- Lightbox / zoom overlay (reference pattern: zoom-in → zoom-out) ---
+  let lbImgs=[], lbIdx=0;
+  function openLightbox(idx){
+    lbIdx=idx;
+    let lb=document.getElementById('lightbox');
+    if(!lb){
+      lb=document.createElement('div');
+      lb.id='lightbox';
+      lb.className='lightbox';
+      lb.innerHTML=`<button class="lb-nav lb-prev" onclick="event.stopPropagation();G.lbNav(-1)">&lsaquo;</button><img id="lb-img" src="" alt=""/><button class="lb-nav lb-next" onclick="event.stopPropagation();G.lbNav(1)">&rsaquo;</button><div class="lb-counter" id="lb-counter"></div>`;
+      lb.addEventListener('click',e=>{
+        // Click anywhere (except nav buttons) = zoom out / close
+        if(!e.target.closest('.lb-nav')) closeLightbox();
+      });
+      document.body.appendChild(lb);
+    }
+    updateLightbox();
+    requestAnimationFrame(()=>lb.classList.add('open'));
+  }
+  function updateLightbox(){
+    const img=document.getElementById('lb-img');
+    const ctr=document.getElementById('lb-counter');
+    if(!img||!lbImgs.length)return;
+    img.src=imgPath(lbImgs[lbIdx]);
+    if(ctr) ctr.textContent=(lbImgs.length>1)?`${lbIdx+1} / ${lbImgs.length}`:'';
+    // Show/hide nav buttons based on image count
+    const prev=document.querySelector('.lb-prev');
+    const next=document.querySelector('.lb-next');
+    if(prev) prev.style.display=lbImgs.length>1?'':'none';
+    if(next) next.style.display=lbImgs.length>1?'':'none';
+  }
+  function closeLightbox(){
+    const lb=document.getElementById('lightbox');
+    if(lb) lb.classList.remove('open');
+  }
+  function lbNav(dir){
+    lbIdx=(lbIdx+dir+lbImgs.length)%lbImgs.length;
+    updateLightbox();
+  }
+
+  // --- Sidebar: Detail ---
+  function renderDetail(id){
+    const n=nd(id);if(!n)return;
+    const par=parent(id), conn=connected(id).filter(c=>c!==id);
+    const hasImgs=n.imgs&&n.imgs.length;
+
+    clearMedia();
+    if(hasImgs){
+      lbImgs=n.imgs;
+    } else {
+      lbImgs=[];
+    }
+
+    let h=`<div class="ph"><div class="ph-l"><span class="ph-icon">${S.cross('#D93025')}</span><span class="ph-title">Index</span></div><button class="ph-btn" onclick="G.go('lw')">&larr;</button></div>`;
+    h+=`<hr class="div"><div class="det">`;
+    h+=`<div class="det-h"><div class="dl"><span class="si">${icon(id,true)}</span><span class="det-type">${typeLabel[n.t]||n.t}</span></div><button class="det-close" onclick="G.go('${par||'lw'}')">&times;</button></div>`;
+    h+=`<div class="det-title">${n.title}</div>`;
+    if(n.sub)h+=`<div class="det-sub">${n.sub}</div>`;
+    if(n.meta)h+=`<div class="det-meta">${n.meta}</div>`;
+
+    // Image gallery inside panel, between meta and description
+    if(hasImgs) h+=galleryHTML(n.imgs, n.title);
+
+    if(n.desc)h+=`<div class="det-body">${n.desc}</div>`;
+    if(n.link)h+=`<div class="det-body"><a href="${n.link}" target="_blank" rel="noopener">${n.link.replace(/^https?:\/\//,'')}</a></div>`;
+
+    // Path nodes (Architecture, Urbanism, Teaching): show child items as menu
+    const ch=children(id);
+    if(ch.length){
+      h+=`<hr class="div">`;
+      ch.forEach(cid=>{const cn=nd(cid);h+=`<div class="sec-item" onclick="G.go('${cid}')"><div class="it">${cn.title}</div><div class="is">${cn.sub||''}</div></div>`});
+    }
+
+    h+=`</div>`;
+
+    // Section navigation (always visible below detail)
+    h+=`<hr class="div">`;
+    D.sections.forEach(s=>{
+      const o=openSec.has(s.key);
+      h+=`<div class="sec${o?' open':''}" data-s="${s.key}">`;
+      h+=`<div class="sec-h" onclick="G.togSec('${s.key}')"><div class="sl"><span class="si">${sidebarIcon(s.icon)}</span><span class="sec-t">${s.label}</span></div><button class="sec-tog">${o?'&#8722;':'+'}</button></div>`;
+      h+=`<div class="sec-body">`;
+      h+=secItems(s);
+      h+=`</div></div>`;
+    });
+
+    pc.innerHTML=h;
+    if(hasImgs) requestAnimationFrame(showMedia);
+  }
+
+  // --- Global interface for inline handlers ---
+  window.G={
+    go(id){justDragged=false;go(id)},
+    togSec(k){openSec.has(k)?openSec.delete(k):openSec.add(k);cur==='lw'?renderIndex():renderDetail(cur)},
+    togBio(){bioOpen=!bioOpen;const ext=document.querySelector('.bio-ext');if(ext)ext.classList.toggle('show',bioOpen)},
+    togIdx(){openSec.size>0?openSec.clear():openSec.add('arch');renderIndex()},
+    lightbox(i){openLightbox(i)},
+    lbNav(d){lbNav(d)}
+  };
+
+  // --- Events ---
+  let rt;
+  window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>apply(cur,false),120)});
+  document.addEventListener('keydown',e=>{
+    const lb=document.getElementById('lightbox');
+    if(lb&&lb.classList.contains('open')){
+      if(e.key==='Escape')closeLightbox();
+      if(e.key==='ArrowLeft')lbNav(-1);
+      if(e.key==='ArrowRight')lbNav(1);
+    }
+  });
+  window.addEventListener('popstate',()=>{const id=parseHash();if(id!==cur){cur=id;apply(id,true);panelFade(()=>{id==='lw'?renderIndex():renderDetail(id)})}});
+  map.addEventListener('click',e=>{if(e.target===map||e.target===svg){if(cur!=='lw'){const p=parent(cur);justDragged=false;go(p||'lw')}}});
+
+  // --- Init ---
+  function init(){
+    createNodes();
+    cur=parseHash();
+    apply(cur, false);
+    cur==='lw'?renderIndex():renderDetail(cur);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+</script>
+</body>
+</html>
