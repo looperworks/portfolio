@@ -225,7 +225,6 @@ hr.div{border:none;border-top:1px dashed #ccc;margin:3px 0}
 </script>
 </head>
 <body>
-<main>
 <noscript>
   <div style="max-width:600px;margin:80px auto;padding:0 20px;font-family:Helvetica,Arial,sans-serif;color:#111">
     <h1 style="font-size:28px;font-weight:500">LooperWorks</h1>
@@ -234,7 +233,7 @@ hr.div{border:none;border-top:1px dashed #ccc;margin:3px 0}
     <p>Contact: <a href="mailto:studio@looperworks.com">studio@looperworks.com</a></p>
   </div>
 </noscript>
-<div id="app">
+<div id="app" role="main">
   <section class="map" id="map">
     <svg id="lines"></svg>
   </section>
@@ -1006,6 +1005,5 @@ const D = {
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 </script>
-</main>
 </body>
 </html>
