@@ -112,6 +112,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(
 
 /* === Panel === */
 .panel{width:var(--panel-w);min-width:var(--panel-w);height:100%;padding:24px 18px 24px 10px;overflow:hidden;z-index:10}
+.panel.expanded{--panel-w:550px}
 .pc{background:var(--panel-bg);border-radius:12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:0 1px 6px rgba(0,0,0,.05);padding:20px 22px;height:calc(100% - 0px);overflow-y:auto}
 .pc::-webkit-scrollbar{width:3px}
 .pc::-webkit-scrollbar-thumb{background:#ccc;border-radius:2px}
@@ -843,6 +844,7 @@ const D = {
   // --- Sidebar: Index ---
   function renderIndex(){
     clearMedia();
+    document.querySelector('.panel').classList.remove('expanded');
     let h=`<div class="ph"><div class="ph-l"><span class="ph-icon">${S.cross('#D93025')}</span><span class="ph-title">Index</span></div><button class="ph-btn" onclick="G.togIdx()">&#8722;</button></div>`;
     h+=`<div class="bio">${D.bio} &mdash; <a href="#" onclick="event.preventDefault();G.togBio()">more information</a>.<div class="bio-ext${bioOpen?' show':''}"><div class="bio-ext-inner">${D.bioExtended}</div></div></div>`;
     D.sections.forEach(s=>{
@@ -924,6 +926,7 @@ const D = {
   // --- Sidebar: Detail ---
   function renderDetail(id){
     const n=nd(id);if(!n)return;
+    document.querySelector('.panel').classList.toggle('expanded',n.t==='architecture'||n.t==='urbanism');
     const par=parent(id), conn=connected(id).filter(c=>c!==id);
     const hasImgs=n.imgs&&n.imgs.length;
 
